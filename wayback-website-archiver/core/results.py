@@ -14,8 +14,14 @@ from core.wayback import ArchiveResult
 
 logger = logging.getLogger(__name__)
 
-JOBS_DIR = Path(__file__).resolve().parent.parent / "data" / "jobs"
-REPORTS_DIR = Path(__file__).resolve().parent.parent / "reports"
+import os
+
+if os.environ.get("VERCEL"):
+    JOBS_DIR = Path("/tmp/data/jobs")
+    REPORTS_DIR = Path("/tmp/reports")
+else:
+    JOBS_DIR = Path(__file__).resolve().parent.parent / "data" / "jobs"
+    REPORTS_DIR = Path(__file__).resolve().parent.parent / "reports"
 
 
 @dataclass

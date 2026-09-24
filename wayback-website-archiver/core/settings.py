@@ -7,7 +7,10 @@ import os
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-SETTINGS_FILE = Path(__file__).resolve().parent.parent / "data" / "settings.json"
+if os.environ.get("VERCEL"):
+    SETTINGS_FILE = Path("/tmp/data/settings.json")
+else:
+    SETTINGS_FILE = Path(__file__).resolve().parent.parent / "data" / "settings.json"
 
 
 @dataclass
