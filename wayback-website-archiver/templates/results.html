@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Past Jobs &amp; Reports — Wayback Website Archiver</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="navbar">
+    <a href="/" class="brand">
+      <div class="brand-icon">W</div>
+      <div>
+        <div class="brand-title">WAYBACK WEBSITE ARCHIVER</div>
+        <span class="brand-subtitle">Job History &amp; Reports</span>
+      </div>
+    </a>
+    <div class="nav-links">
+      <a href="/" class="nav-link">Archiver</a>
+      <a href="/results" class="nav-link active">Jobs &amp; Reports</a>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">📁 Archiving Jobs &amp; Saved Reports</h2>
+          <p class="card-desc">Review previous crawl runs, inspect snapshot URLs, and export CSV/JSON data.</p>
+        </div>
+        <a href="/" class="btn btn-primary btn-sm">+ New Archiving Job</a>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Website</th>
+              <th style="width: 110px;">Status</th>
+              <th style="width: 150px;">Date</th>
+              <th style="width: 80px;">Total</th>
+              <th style="width: 80px; color: var(--success);">Success</th>
+              <th style="width: 80px; color: var(--warning);">Skipped</th>
+              <th style="width: 80px; color: var(--danger);">Failed</th>
+              <th style="width: 280px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="jobsTableBody">
+            <tr>
+              <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 28px;">Loading past jobs...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    async function loadJobs() {
+      const tbody = document.getElementById('jobsTableBody');
+      try {
+        const res = await fetch('/api/jobs');
+        if (!res.ok) throw new Error("Failed to load jobs");
+        const jobs = await res.json();
+        
+        if (!jobs || jobs.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 28px;">No archiving jobs recorded yet. Run a website discovery first!</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = jobs.map(j => {
+          const isComplete = j.status === 'completed';
+          const badgeCls = isComplete ? 'badge-success' : (j.status === 'paused' ? 'badge-skipped' : 'badge-running');
+          
+          let resumeBtn = '';
+          if (j.status === 'running' || j.status === 'paused') {
+            resumeBtn = `<a href="/?resume=${j.id}" class="btn btn-warning btn-sm" style="padding: 4px 8px;">Resume</a>`;
+          }
+
+          return `
+            <tr>
+              <td><strong><a href="${j.website_url}" target="_blank" rel="noopener">${j.website_url}</a></strong></td>
+              <td><span class="badge ${badgeCls}">${j.status}</span></td>
+              <td style="font-size: 0.82rem; color: var(--text-muted);">${j.created_at ? j.created_at.slice(0, 19).replace('T', ' ') : '—'}</td>
+              <td><strong>${j.total}</strong></td>
+              <td style="color: var(--success); font-weight: 600;">${j.successful}</td>
+              <td style="color: var(--warning); font-weight: 600;">${j.skipped}</td>
+              <td style="color: var(--danger); font-weight: 600;">${j.failed}</td>
+              <td>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                  <a href="/api/jobs/${j.id}/report" target="_blank" class="btn btn-primary btn-sm" style="padding: 4px 8px;">Report</a>
+                  <a href="/api/jobs/${j.id}/export/csv" class="btn btn-secondary btn-sm" style="padding: 4px 8px;">CSV</a>
+                  <a href="/api/jobs/${j.id}/export/json" class="btn btn-secondary btn-sm" style="padding: 4px 8px;">JSON</a>
+                  ${resumeBtn}
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--danger); padding: 20px;">Error: ${err.message}</td></tr>`;
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', loadJobs);
+  </script>
+</body>
+</html>

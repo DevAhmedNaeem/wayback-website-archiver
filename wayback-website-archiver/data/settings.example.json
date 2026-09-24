@@ -1,0 +1,15 @@
+{
+  "access_key": "YOUR_ACCESS_KEY",
+  "secret_key": "YOUR_SECRET_KEY",
+  "max_pages": 500,
+  "max_depth": 3,
+  "check_sitemap": true,
+  "check_navigation": true,
+  "follow_internal_links": true,
+  "archive_delay": 10,
+  "request_timeout": 60,
+  "retries": 3,
+  "check_existing_snapshots": true,
+  "skip_existing_days": 30,
+  "include_external": false
+}

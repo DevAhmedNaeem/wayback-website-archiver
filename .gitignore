@@ -1,0 +1,39 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Sensitive configuration & API keys
+data/settings.json
+wayback-website-archiver/data/settings.json
+.env
+
+# Logs and runtime artifacts
+*.log
+wayback_archiver.log
+discovered_urls.txt
+
+# Job data and generated reports
+wayback-website-archiver/data/jobs/*
+!wayback-website-archiver/data/jobs/.gitkeep
+wayback-website-archiver/reports/*
+!wayback-website-archiver/reports/.gitkeep
+results.csv
+results.json
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wayback Website Archiver</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <!-- Navigation bar -->
+  <header class="navbar">
+    <a href="/" class="brand">
+      <div class="brand-icon">W</div>
+      <div>
+        <div class="brand-title">WAYBACK WEBSITE ARCHIVER</div>
+        <span class="brand-subtitle">Internet Archive Automation</span>
+      </div>
+    </a>
+    <div class="nav-links">
+      <a href="/" class="nav-link active">Archiver</a>
+      <a href="/results" class="nav-link">Jobs &amp; Reports</a>
+      <div id="authBadge" class="nav-auth-badge auth-badge-warning">
+        <span>Checking API...</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Resume Banner (shown if previous unfinished job exists) -->
+    <div id="resumeBanner" class="resume-banner" style="display: none;">
+      <div class="resume-info">
+        <h4>Previous Unfinished Job Detected</h4>
+        <p id="resumeDetails">You have an unfinished archiving task. Would you like to resume?</p>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button id="btnResumeJob" class="btn btn-primary btn-sm">Resume Job</button>
+        <button id="btnDismissResume" class="btn btn-secondary btn-sm">Dismiss</button>
+      </div>
+    </div>
+
+    <!-- Step 1: Input URL and Discovery -->
+    <section class="card" id="discoverySection">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">1. Discover Website Pages</h2>
+          <p class="card-desc">Enter your website homepage URL or direct sitemap URL (e.g. <code>/page-sitemap.xml</code>).</p>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label class="input-label" for="websiteUrl">Website URL or Sitemap URL</label>
+        <div class="input-row">
+          <input 
+            type="url" 
+            id="websiteUrl" 
+            class="text-input" 
+            placeholder="https://example.com/ or https://example.com/page-sitemap.xml" 
+            value="https://americantowingut.com/page-sitemap.xml" 
+            required
+          />
+          <button id="btnDiscoverMenu" class="btn btn-primary" onclick="startDiscovery('menu')">
+            <span>🧭 Discover From Menu</span>
+          </button>
+          <button id="btnDiscoverSitemap" class="btn btn-secondary" onclick="startDiscovery('sitemap')">
+            <span>🗺️ Discover From Sitemap</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="modes-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+        <div class="mode-btn" onclick="startDiscovery('menu')">
+          <div class="mode-title">🧭 Discover From Menu / Navigation</div>
+          <div class="mode-desc">Extracts public pages found in navigation bars, headers, Elementor menus, and WordPress navbars.</div>
+        </div>
+        <div class="mode-btn" onclick="startDiscovery('sitemap')">
+          <div class="mode-title">🗺️ Discover From Sitemap</div>
+          <div class="mode-desc">Extracts all URLs directly from sitemap.xml, sitemap_index.xml, wp-sitemap.xml, and robots.txt.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Live Discovery Status (shown while crawling) -->
+    <section class="card" id="discoveryProgressSection" style="display: none;">
+      <div class="card-header">
+        <h3 class="card-title">🔍 Discovering Website Pages...</h3>
+        <span id="discoveryCountBadge" class="badge badge-running">0 Pages Found</span>
+      </div>
+      <div class="current-status-box">
+        <span class="status-label">Live Activity</span>
+        <div id="discoveryLiveLog" class="status-detail">Connecting to site...</div>
+      </div>
+    </section>
+
+    <!-- Step 2: Discovered Pages Selection -->
+    <section class="card" id="selectionSection" style="display: none;">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">2. Review &amp; Select Pages to Archive</h2>
+          <p class="card-desc">Website: <strong id="lblDiscoveredDomain" style="color: var(--accent-cyan);"></strong> &bull; Total Discovered: <strong id="lblTotalDiscovered">0</strong></p>
+        </div>
+        <button id="btnStartArchiving" class="btn btn-success" onclick="startArchiving()">
+          <span>💾 ARCHIVE SELECTED PAGES (<span id="lblSelectedCount">0</span>)</span>
+        </button>
+      </div>
+
+      <div class="table-toolbar">
+        <div class="selection-actions">
+          <button class="btn btn-secondary btn-sm" onclick="selectAll(true)">Select All</button>
+          <button class="btn btn-secondary btn-sm" onclick="selectAll(false)">Unselect All</button>
+          <span style="font-size: 0.85rem; color: var(--text-muted); margin-left: 8px;">
+            <strong id="lblSelectedCountSummary">0</strong> of <span id="lblTotalCountSummary">0</span> selected
+          </span>
+        </div>
+        <div style="flex: 1; max-width: 320px;">
+          <input type="text" id="urlFilterInput" class="text-input" placeholder="Filter by keyword / path..." oninput="filterUrlsTable()" style="padding: 6px 12px; font-size: 0.85rem;">
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table id="discoveredTable">
+          <thead>
+            <tr>
+              <th style="width: 40px; text-align: center;"><input type="checkbox" id="chkMaster" onchange="toggleMasterCheckbox(this.checked)"></th>
+              <th style="width: 40px;">#</th>
+              <th>Discovered URL</th>
+              <th style="width: 120px;">Source</th>
+            </tr>
+          </thead>
+          <tbody id="discoveredTableBody">
+            <!-- Populated via JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Step 3: Archiving Progress -->
+    <section class="card progress-card" id="archivingSection" style="display: none;">
+      <div class="progress-header">
+        <div>
+          <h2 class="card-title" id="archivingStatusTitle">Archiving Website to Wayback Machine</h2>
+          <p class="card-desc">Submitting URLs to Internet Archive Save Page Now with rate-limiting safety.</p>
+        </div>
+        <div class="progress-count" id="progressFraction">0 / 0</div>
+      </div>
+
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressBarFill"></div>
+      </div>
+
+      <div class="current-status-box" style="margin-bottom: 20px;">
+        <span class="status-label">Current Processing URL</span>
+        <div id="currentUrlDisplay" class="status-url">—</div>
+        <div id="currentStageDisplay" class="status-detail">Initializing...</div>
+      </div>
+
+      <!-- Action buttons during archive -->
+      <div style="display: flex; gap: 10px; margin-bottom: 20px;" id="archiveControls">
+        <button id="btnPauseArchive" class="btn btn-secondary btn-sm" onclick="pauseOrResumeArchive()">Pause</button>
+        <button id="btnCancelArchive" class="btn btn-danger btn-sm" onclick="cancelArchive()">Stop Archiving</button>
+      </div>
+
+      <!-- Live Results Table -->
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 35px;">#</th>
+              <th>Target Page</th>
+              <th style="width: 110px;">Status</th>
+              <th>Wayback Snapshot URL</th>
+              <th style="width: 160px;">Timestamp</th>
+              <th>Notes / Errors</th>
+            </tr>
+          </thead>
+          <tbody id="resultsTableBody">
+            <!-- Populated in real-time -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Step 4: Completion Banner & Exports -->
+    <section class="card" id="completionSection" style="display: none;">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title" style="color: var(--success);">🎉 Archiving Complete!</h2>
+          <p class="card-desc">All selected pages have been processed and snapshots recorded.</p>
+        </div>
+      </div>
+
+      <div class="metrics-row">
+        <div class="metric-box">
+          <div class="status-label">Total Submitted</div>
+          <div class="metric-num" style="color: var(--accent-cyan);" id="statTotal">0</div>
+        </div>
+        <div class="metric-box">
+          <div class="status-label">Successfully Saved</div>
+          <div class="metric-num" style="color: var(--success);" id="statSuccess">0</div>
+        </div>
+        <div class="metric-box">
+          <div class="status-label">Skipped (Recent)</div>
+          <div class="metric-num" style="color: var(--warning);" id="statSkipped">0</div>
+        </div>
+        <div class="metric-box">
+          <div class="status-label">Failed</div>
+          <div class="metric-num" style="color: var(--danger);" id="statFailed">0</div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px;">
+        <a id="btnViewReport" href="#" target="_blank" class="btn btn-primary">
+          <span>📄 Open Visual Report</span>
+        </a>
+        <a id="btnExportCsv" href="#" class="btn btn-secondary">
+          <span>📥 Export CSV</span>
+        </a>
+        <a id="btnExportJson" href="#" class="btn btn-secondary">
+          <span>📦 Export JSON</span>
+        </a>
+        <a id="btnOpenWaybackSite" href="#" target="_blank" class="btn btn-secondary">
+          <span>🌐 View on Wayback Machine</span>
+        </a>
+        <button class="btn btn-secondary" onclick="resetForNewScan()">
+          <span>🔄 Archive Another Site</span>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Wayback Website Archiver &bull; Official Internet Archive Save Page Now (SPN2) Integration &bull; Ready for WordPress, Elementor &amp; Custom Sites
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

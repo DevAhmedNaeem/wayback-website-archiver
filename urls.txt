@@ -1,0 +1,7 @@
+# Wayback Bulk Archiver - Sample URLs
+# One URL per line. Lines starting with # are ignored.
+
+https://example.com/
+https://example.com/about
+https://example.com/services
+https://example.com/contact

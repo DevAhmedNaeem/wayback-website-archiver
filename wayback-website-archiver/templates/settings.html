@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings — Wayback Website Archiver</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="navbar">
+    <a href="/" class="brand">
+      <div class="brand-icon">W</div>
+      <div>
+        <div class="brand-title">WAYBACK WEBSITE ARCHIVER</div>
+        <span class="brand-subtitle">Configuration &amp; Credentials</span>
+      </div>
+    </a>
+    <div class="nav-links">
+      <a href="/" class="nav-link">Archiver</a>
+      <a href="/results" class="nav-link">Jobs &amp; Reports</a>
+      <a href="/settings" class="nav-link active">Settings</a>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <h2 class="card-title">🔑 Internet Archive Credentials</h2>
+          <p class="card-desc">Your S3 Access and Secret keys allow authenticated Save Page Now submissions with dedicated queue priority.</p>
+        </div>
+      </div>
+
+      <div style="background: rgba(56, 189, 248, 0.08); border: 1px solid var(--border-accent); border-radius: 8px; padding: 14px 18px; margin-bottom: 20px; font-size: 0.88rem;">
+        <strong>How to obtain your keys:</strong>
+        <ol style="margin-left: 20px; margin-top: 6px; color: var(--text-muted);">
+          <li>Log in to your free account at <a href="https://archive.org" target="_blank" rel="noopener">archive.org</a>.</li>
+          <li>Navigate to <a href="https://archive.org/account/s3.php" target="_blank" rel="noopener" style="color: var(--accent-cyan); font-weight: 600;">https://archive.org/account/s3.php</a>.</li>
+          <li>Click <em>"Generate New Keys"</em> (or copy your existing S3 Access Key &amp; Secret Key).</li>
+          <li>Paste them below and click <strong>Test Connection</strong>.</li>
+        </ol>
+      </div>
+
+      <form id="settingsForm" onsubmit="handleSaveSettings(event)">
+        <div class="input-group">
+          <label class="input-label" for="accessKey">Access Key</label>
+          <input type="text" id="accessKey" class="text-input" placeholder="e.g. your_access_key" autocomplete="off" required>
+        </div>
+
+        <div class="input-group">
+          <label class="input-label" for="secretKey">Secret Key</label>
+          <input type="password" id="secretKey" class="text-input" placeholder="e.g. your_secret_key" autocomplete="off" required>
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;">Credentials are stored locally in data/settings.json and never shared or printed in reports.</div>
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-bottom: 24px;">
+          <button type="button" class="btn btn-secondary" onclick="testConnection()">
+            <span>🔍 Test Connection</span>
+          </button>
+          <span id="testResultMsg" style="display: flex; align-items: center; font-size: 0.88rem; font-weight: 600;"></span>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--border-color); margin: 24px 0;">
+
+        <div class="card-header" style="margin-bottom: 12px;">
+          <h3 class="card-title" style="font-size: 1.1rem;">⚙️ Crawler &amp; Archive Settings</h3>
+        </div>
+
+        <div class="settings-grid">
+          <div>
+            <label class="input-label">Max Discovered Pages</label>
+            <input type="number" id="maxPages" class="text-input" value="500" min="1" max="5000">
+          </div>
+          <div>
+            <label class="input-label">Max Crawl Depth</label>
+            <input type="number" id="maxDepth" class="text-input" value="3" min="1" max="10">
+          </div>
+          <div>
+            <label class="input-label">Archive Delay (Between Requests)</label>
+            <select id="archiveDelay" class="text-input">
+              <option value="5">5 seconds</option>
+              <option value="10">10 seconds (Default / Polite)</option>
+              <option value="15">15 seconds</option>
+              <option value="30">30 seconds</option>
+            </select>
+          </div>
+          <div>
+            <label class="input-label">Request Timeout (Seconds)</label>
+            <input type="number" id="requestTimeout" class="text-input" value="60" min="10" max="300">
+          </div>
+          <div>
+            <label class="input-label">Max Retries per URL</label>
+            <input type="number" id="retries" class="text-input" value="3" min="1" max="5">
+          </div>
+          <div>
+            <label class="input-label">Skip Existing Snapshots Within</label>
+            <select id="skipExistingDays" class="text-input">
+              <option value="0">Never skip (Force new capture)</option>
+              <option value="1">1 day</option>
+              <option value="7">7 days</option>
+              <option value="30">30 days (Default)</option>
+              <option value="90">90 days</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
+          <label style="display: flex; align-items: center; gap: 10px; font-size: 0.9rem; cursor: pointer;">
+            <input type="checkbox" id="checkExistingSnapshots" checked>
+            <span>Check Wayback Availability before capturing</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 10px; font-size: 0.9rem; cursor: pointer;">
+            <input type="checkbox" id="includeExternal">
+            <span>Include external links (Warning: will crawl external third-party domains)</span>
+          </label>
+        </div>
+
+        <div style="margin-top: 28px; display: flex; gap: 12px;">
+          <button type="submit" class="btn btn-primary">
+            <span>💾 Save Settings</span>
+          </button>
+          <a href="/" class="btn btn-secondary">Back to Archiver</a>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <script>
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        if (res.ok) {
+          const data = await res.json();
+          document.getElementById('accessKey').value = data.access_key || '';
+          document.getElementById('secretKey').value = data.secret_key || '';
+          document.getElementById('maxPages').value = data.max_pages || 500;
+          document.getElementById('maxDepth').value = data.max_depth || 3;
+          document.getElementById('archiveDelay').value = data.archive_delay || 10;
+          document.getElementById('requestTimeout').value = data.request_timeout || 60;
+          document.getElementById('retries').value = data.retries || 3;
+          document.getElementById('skipExistingDays').value = data.skip_existing_days ?? 30;
+          document.getElementById('checkExistingSnapshots').checked = !!data.check_existing_snapshots;
+          document.getElementById('includeExternal').checked = !!data.include_external;
+        }
+      } catch (e) {
+        console.error("Error loading settings:", e);
+      }
+    }
+
+    async function handleSaveSettings(e) {
+      e.preventDefault();
+      const payload = {
+        access_key: document.getElementById('accessKey').value.trim(),
+        secret_key: document.getElementById('secretKey').value.trim(),
+        max_pages: parseInt(document.getElementById('maxPages').value, 10),
+        max_depth: parseInt(document.getElementById('maxDepth').value, 10),
+        archive_delay: parseInt(document.getElementById('archiveDelay').value, 10),
+        request_timeout: parseInt(document.getElementById('requestTimeout').value, 10),
+        retries: parseInt(document.getElementById('retries').value, 10),
+        skip_existing_days: parseInt(document.getElementById('skipExistingDays').value, 10),
+        check_existing_snapshots: document.getElementById('checkExistingSnapshots').checked,
+        include_external: document.getElementById('includeExternal').checked,
+      };
+
+      try {
+        const res = await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          alert("Settings saved successfully!");
+        } else {
+          alert("Failed to save settings: " + (await res.text()));
+        }
+      } catch (err) {
+        alert("Error saving settings: " + err.message);
+      }
+    }
+
+    async function testConnection() {
+      const msg = document.getElementById('testResultMsg');
+      msg.textContent = "Testing...";
+      msg.style.color = "var(--accent-cyan)";
+
+      const access = document.getElementById('accessKey').value.trim();
+      const secret = document.getElementById('secretKey').value.trim();
+
+      try {
+        const res = await fetch('/api/settings/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_key: access, secret_key: secret }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          msg.textContent = "✓ " + data.message;
+          msg.style.color = "var(--success)";
+        } else {
+          msg.textContent = "✗ " + data.message;
+          msg.style.color = "var(--danger)";
+        }
+      } catch (err) {
+        msg.textContent = "✗ Network error: " + err.message;
+        msg.style.color = "var(--danger)";
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', loadSettings);
+  </script>
+</body>
+</html>
