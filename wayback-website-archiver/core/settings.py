@@ -27,7 +27,7 @@ class Settings:
     follow_internal_links: bool = True
 
     # Archiving
-    archive_delay: int = 10
+    archive_delay: int = 15
     request_timeout: int = 60
     retries: int = 3
     check_existing_snapshots: bool = True

@@ -17,11 +17,7 @@ AVAILABILITY_API_URL = "https://archive.org/wayback/available"
 USER_STATUS_API_URL = "https://web.archive.org/save/status/user"
 
 DEFAULT_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
+    "User-Agent": "WaybackBulkArchiver/2.0.0 (bulk archival tool)",
     "Accept": "application/json",
 }
 
@@ -169,9 +165,20 @@ class WaybackClient:
                 )
 
                 if resp.status_code == 429:
-                    retry_after = int(resp.headers.get("Retry-After", 30))
+                    retry_after = max(int(resp.headers.get("Retry-After", 30)), 30)
                     notify(f"Rate limited (HTTP 429). Waiting {retry_after}s...")
                     time.sleep(retry_after)
+                    # Check if an existing or newly captured snapshot is available
+                    exists, snap_url, dt = self.check_existing_snapshot(url)
+                    if exists and snap_url:
+                        return ArchiveResult(
+                            original_url=url,
+                            status="SUCCESS",
+                            archive_url=snap_url,
+                            capture_timestamp=dt.strftime("%Y-%m-%d %H:%M:%S UTC") if dt else "",
+                            http_status=200,
+                            existing=True,
+                        )
                     continue
 
                 if resp.status_code in (401, 403):
@@ -286,7 +293,7 @@ class WaybackClient:
         """Poll Save Page Now status endpoint until completed or timeout."""
         start_time = time.time()
         status_url = f"{STATUS_API_URL}{job_id}"
-        poll_interval = 4
+        poll_interval = 6
 
         while time.time() - start_time < max_poll_seconds:
             time.sleep(poll_interval)

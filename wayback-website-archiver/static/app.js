@@ -289,7 +289,7 @@ async function startArchiving() {
 
   const websiteUrl = document.getElementById("websiteUrl").value.trim();
   const cfgDelayEl = document.getElementById("cfgArchiveDelay");
-  const archiveDelay = cfgDelayEl ? (parseInt(cfgDelayEl.value, 10) || 10) : 10;
+  const archiveDelay = cfgDelayEl ? (parseInt(cfgDelayEl.value, 10) || 15) : 15;
   const cfgSkipEl = document.getElementById("cfgSkipDays");
   const skipDays = cfgSkipEl ? (parseInt(cfgSkipEl.value, 10) ?? 30) : 30;
 
