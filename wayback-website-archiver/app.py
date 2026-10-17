@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import os
+import socket
 import sys
 import threading
 import time
@@ -12,6 +14,26 @@ import webbrowser
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Optional
+
+import urllib3
+
+urllib3.disable_warnings()
+
+DNS_CACHE = {
+    "web.archive.org": "207.241.237.3",
+    "archive.org": "207.241.224.2",
+}
+
+if not getattr(socket, "_ipv4_patched", False):
+    _orig_getaddrinfo = socket.getaddrinfo
+
+    def _fast_getaddrinfo(host, port, family=0, socktype=0, proto=0, flags=0):
+        if host in DNS_CACHE:
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (DNS_CACHE[host], port))]
+        return _orig_getaddrinfo(host, port, family, socktype, proto, flags)
+
+    socket.getaddrinfo = _fast_getaddrinfo
+    socket._ipv4_patched = True
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
@@ -70,7 +92,7 @@ cancel_flags: dict[str, bool] = {}
 # --- Pydantic Request Models ---
 class DiscoverRequest(BaseModel):
     url: str
-    mode: str = "smart"  # smart, sitemap, menu
+    mode: str = "both"  # both, sitemap, menu, smart
     max_pages: int = 500
     max_depth: int = 3
     include_external: bool = False
@@ -80,8 +102,10 @@ class ArchiveRequest(BaseModel):
     website_url: str
     urls: list[str]
     archive_delay: Optional[int] = None
+    concurrency: Optional[int] = None
     skip_existing_days: Optional[int] = None
     check_existing_snapshots: Optional[bool] = None
+    capture_all: Optional[bool] = None
 
 
 class SettingsRequest(BaseModel):
@@ -89,9 +113,12 @@ class SettingsRequest(BaseModel):
     secret_key: str
     max_pages: int = 500
     max_depth: int = 3
-    archive_delay: int = 10
-    request_timeout: int = 60
-    retries: int = 3
+    archive_delay: int = 2
+    request_timeout: int = 45
+    retries: int = 2
+    concurrency: int = 3
+    max_poll_seconds: int = 60
+    capture_all: bool = False
     check_existing_snapshots: bool = True
     skip_existing_days: int = 30
     include_external: bool = False
@@ -140,6 +167,9 @@ async def update_settings(req: SettingsRequest):
     settings.archive_delay = req.archive_delay
     settings.request_timeout = req.request_timeout
     settings.retries = req.retries
+    settings.concurrency = req.concurrency
+    settings.max_poll_seconds = req.max_poll_seconds
+    settings.capture_all = req.capture_all
     settings.check_existing_snapshots = req.check_existing_snapshots
     settings.skip_existing_days = req.skip_existing_days
     settings.include_external = req.include_external
@@ -177,12 +207,16 @@ def _run_discovery_worker(task_id: str, req: DiscoverRequest):
         )
 
         task_data["status"] = "running"
-        if req.mode == "sitemap":
+        if req.mode in ("both", "all", "combined"):
+            urls = crawler.crawl_both()
+        elif req.mode == "sitemap":
             urls = crawler.crawl_sitemap_only()
         elif req.mode == "menu":
             urls = crawler.crawl_menu_only()
-        else:
+        elif req.mode == "smart":
             urls = crawler.crawl_smart()
+        else:
+            urls = crawler.crawl_both()
 
         task_data["status"] = "completed"
         task_data["urls"] = urls
@@ -250,48 +284,81 @@ def _run_archiving_worker(job_id: str):
         job.status = "running"
         save_job(job)
 
-        while job.current_index < len(job.urls_to_archive):
-            # Check cancellation
+        total_urls = len(job.urls_to_archive)
+        # Find which URLs already have results (in case of resume)
+        done_urls = {r.get("original_url") for r in job.results}
+        remaining_urls = [u for u in job.urls_to_archive if u not in done_urls]
+
+        concurrency = max(1, min(settings.concurrency, 5))
+        state_lock = threading.Lock()
+        active_in_flight: set[str] = set()
+
+        def process_url(url: str):
             if cancel_flags.get(job_id):
-                job.status = "cancelled"
-                save_job(job)
-                job_meta["current_stage"] = "Cancelled by user"
-                return
+                return None
 
-            # Check pause
             pause_event.wait()
+            if cancel_flags.get(job_id):
+                return None
 
-            url = job.urls_to_archive[job.current_index]
-            job_meta["current_url"] = url
-            job_meta["current_stage"] = f"Processing ({job.current_index + 1}/{len(job.urls_to_archive)})..."
+            with state_lock:
+                active_in_flight.add(url)
+                display_active = list(active_in_flight)[-2:]
+                job_meta["current_url"] = " | ".join(display_active)
+                job_meta["current_stage"] = f"Archiving in parallel ({len(job.results)}/{total_urls} done, {len(active_in_flight)} in-flight)..."
 
             def notify_stage(stage_msg: str):
-                job_meta["current_stage"] = stage_msg
+                with state_lock:
+                    short_url = url.split("://")[-1][:30]
+                    job_meta["current_stage"] = f"[{short_url}] {stage_msg}"
 
-            # Execute capture
             result = client.archive_url(
                 url=url,
                 check_existing=settings.check_existing_snapshots,
                 skip_existing_days=settings.skip_existing_days,
                 status_callback=notify_stage,
+                capture_all=settings.capture_all,
+                max_poll_seconds=settings.max_poll_seconds,
             )
 
-            job.results.append(asdict(result))
-            job.current_index += 1
-            save_job(job)
+            with state_lock:
+                active_in_flight.discard(url)
+                job.results.append(asdict(result))
+                job.current_index = len(job.results)
+                save_job(job)
+                job_meta["current_stage"] = f"Archived {len(job.results)}/{total_urls} pages"
 
-            # Polite delay between items if there are more URLs
-            if job.current_index < len(job.urls_to_archive):
-                delay = settings.archive_delay
-                for s in range(delay, 0, -1):
+            if settings.archive_delay > 0:
+                time.sleep(settings.archive_delay)
+
+            return result
+
+        if concurrency > 1 and len(remaining_urls) > 1:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
+                futures = []
+                for u in remaining_urls:
                     if cancel_flags.get(job_id):
                         break
-                    job_meta["current_stage"] = f"Waiting {s}s before next URL (rate limiting safety)..."
-                    time.sleep(1)
+                    futures.append(executor.submit(process_url, u))
 
-        job.status = "completed"
+                for f in concurrent.futures.as_completed(futures):
+                    if cancel_flags.get(job_id):
+                        executor.shutdown(wait=False, cancel_futures=True)
+                        break
+        else:
+            for u in remaining_urls:
+                if cancel_flags.get(job_id):
+                    break
+                process_url(u)
+
+        if cancel_flags.get(job_id):
+            job.status = "cancelled"
+            job_meta["current_stage"] = "Cancelled by user"
+        else:
+            job.status = "completed"
+            job_meta["current_stage"] = f"All {total_urls} pages processed successfully!"
+
         save_job(job)
-        job_meta["current_stage"] = "Archiving completed successfully!"
 
         # Generate exported reports
         report_dir = REPORTS_DIR / job_id
@@ -316,6 +383,12 @@ async def start_archive(req: ArchiveRequest):
         settings.archive_delay = req.archive_delay
     if req.skip_existing_days is not None:
         settings.skip_existing_days = req.skip_existing_days
+    if req.concurrency is not None:
+        settings.concurrency = req.concurrency
+    if req.capture_all is not None:
+        settings.capture_all = req.capture_all
+    if req.check_existing_snapshots is not None:
+        settings.check_existing_snapshots = req.check_existing_snapshots
     save_settings(settings)
 
     job_id = str(uuid.uuid4())[:8]
@@ -338,7 +411,7 @@ async def start_archive(req: ArchiveRequest):
 
     active_jobs[job_id] = {
         "current_url": "",
-        "current_stage": "Starting archive thread...",
+        "current_stage": "Starting parallel archive thread...",
     }
 
     thread = threading.Thread(target=_run_archiving_worker, args=(job_id,), daemon=True)

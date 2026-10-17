@@ -55,25 +55,32 @@
             id="websiteUrl" 
             class="text-input" 
             placeholder="https://example.com/ or https://example.com/page-sitemap.xml" 
-            value="https://americantowingut.com/page-sitemap.xml" 
+            value="https://knoxmith.com/page-sitemap.xml" 
             required
           />
-          <button id="btnDiscoverMenu" class="btn btn-primary" onclick="startDiscovery('menu')">
-            <span>🧭 Discover From Menu</span>
+          <button id="btnDiscoverBoth" class="btn btn-primary" onclick="startDiscovery('both')">
+            <span>🌟 Discover Both (Menu + Sitemap)</span>
+          </button>
+          <button id="btnDiscoverMenu" class="btn btn-secondary" onclick="startDiscovery('menu')">
+            <span>🧭 Menu Only</span>
           </button>
           <button id="btnDiscoverSitemap" class="btn btn-secondary" onclick="startDiscovery('sitemap')">
-            <span>🗺️ Discover From Sitemap</span>
+            <span>🗺️ Sitemap Only</span>
           </button>
         </div>
       </div>
 
-      <div class="modes-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
+      <div class="modes-grid" style="grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));">
+        <div class="mode-btn" onclick="startDiscovery('both')" style="border-color: var(--accent-cyan); background: rgba(56, 189, 248, 0.08);">
+          <div class="mode-title" style="color: var(--accent-cyan);">🌟 Discover Both (Menu + Sitemap) [RECOMMENDED]</div>
+          <div class="mode-desc">Extracts pages from header/footer menus, Elementor widgets AND XML sitemaps combined so zero links are missed.</div>
+        </div>
         <div class="mode-btn" onclick="startDiscovery('menu')">
-          <div class="mode-title">🧭 Discover From Menu / Navigation</div>
+          <div class="mode-title">🧭 Discover From Menu Only</div>
           <div class="mode-desc">Extracts public pages found in navigation bars, headers, Elementor menus, and WordPress navbars.</div>
         </div>
         <div class="mode-btn" onclick="startDiscovery('sitemap')">
-          <div class="mode-title">🗺️ Discover From Sitemap</div>
+          <div class="mode-title">🗺️ Discover From Sitemap Only</div>
           <div class="mode-desc">Extracts all URLs directly from sitemap.xml, sitemap_index.xml, wp-sitemap.xml, and robots.txt.</div>
         </div>
       </div>
@@ -101,6 +108,39 @@
         <button id="btnStartArchiving" class="btn btn-success" onclick="startArchiving()">
           <span>💾 ARCHIVE SELECTED PAGES (<span id="lblSelectedCount">0</span>)</span>
         </button>
+      </div>
+
+      <!-- Speed & Archiving Options -->
+      <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; display: flex; flex-wrap: wrap; gap: 20px; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label style="font-size: 0.85rem; font-weight: 600; color: var(--accent-cyan);">⚡ Concurrency:</label>
+          <select id="cfgConcurrency" class="text-input" style="padding: 4px 10px; font-size: 0.85rem; width: auto;">
+            <option value="1">1 Worker (Sequential)</option>
+            <option value="2">2 Workers (Fast)</option>
+            <option value="3" selected>3 Workers (Turbo - Recommended)</option>
+            <option value="4">4 Workers</option>
+            <option value="5">5 Workers</option>
+          </select>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label style="font-size: 0.85rem; font-weight: 600; color: var(--text-main);">⏱️ Delay Between URLs:</label>
+          <select id="cfgArchiveDelay" class="text-input" style="padding: 4px 10px; font-size: 0.85rem; width: auto;">
+            <option value="1">1 second (Turbo)</option>
+            <option value="2" selected>2 seconds (Recommended)</option>
+            <option value="5">5 seconds</option>
+            <option value="10">10 seconds</option>
+          </select>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <label style="font-size: 0.85rem; font-weight: 600; color: var(--accent-cyan);">⚡ Capture Mode:</label>
+          <select id="cfgSkipDays" class="text-input" style="padding: 4px 10px; font-size: 0.85rem; width: auto; font-weight: 600; color: #38bdf8;">
+            <option value="0" selected>⚡ Always Upload Fresh Snapshots Today (New)</option>
+            <option value="7">Skip if captured within 7 days</option>
+            <option value="30">Skip if captured within 30 days</option>
+          </select>
+        </div>
       </div>
 
       <div class="table-toolbar">

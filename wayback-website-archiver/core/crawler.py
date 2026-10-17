@@ -49,6 +49,7 @@ class WebsiteCrawler:
         self.discovered_set: set[str] = set()
         self.logs: list[str] = []
         self.session = requests.Session()
+        self.session.verify = False
         self.session.headers.update(DEFAULT_HEADERS)
 
     def _log(self, message: str) -> None:
@@ -100,11 +101,14 @@ class WebsiteCrawler:
             timeout=self.timeout,
             include_external=self.include_external,
         )
-        self._log(f"Found {len(sitemaps)} sitemaps, extracting URLs...")
-        for u in urls:
-            if len(self.discovered_urls) >= self.max_pages:
-                break
-            self._add_url(u, source="sitemap")
+        if not urls:
+            self._log("⚠️ Could not extract pages from sitemap.")
+        else:
+            self._log(f"Extracted {len(urls)} page(s) across {len(sitemaps)} sitemap(s)...")
+            for u in urls:
+                if len(self.discovered_urls) >= self.max_pages:
+                    break
+                self._add_url(u, source="sitemap")
 
         self._log(f"Sitemap discovery finished: {len(self.discovered_urls)} unique pages.")
         return self.discovered_urls
@@ -129,19 +133,90 @@ class WebsiteCrawler:
                 break
             self._add_url(u, source="menu")
 
+        # Fail-safe: If menu yielded only 1 page (homepage), scan sitemap so user gets all pages
+        if len(self.discovered_urls) <= 1:
+            self._log("Menu extraction yielded only 1 page; querying sitemap to discover all pages...")
+            sitemap_urls, _ = discover_sitemap_urls(
+                self.base_url,
+                timeout=self.timeout,
+                include_external=self.include_external,
+            )
+            for u in sitemap_urls:
+                if len(self.discovered_urls) >= self.max_pages:
+                    break
+                self._add_url(u, source="sitemap_fallback")
+
         self._log(f"Menu discovery finished: {len(self.discovered_urls)} unique pages.")
+        return self.discovered_urls
+
+    def crawl_both(self) -> list[str]:
+        """Discover pages from BOTH Navigation Menu AND Sitemap(s), merging all links."""
+        parsed = urlparse(self.base_url)
+        homepage = f"{parsed.scheme or 'https'}://{parsed.netloc}/"
+        self._log(f"Starting discovery from BOTH Menu and Sitemap for {homepage}...")
+        self._add_url(homepage, source="homepage")
+
+        # 1. Navigation and Menu scan
+        self._log("🧭 Scanning navigation landmarks, header, footer, and menu elements...")
+        menu_urls, err = fetch_and_extract_menu_urls(
+            homepage,
+            timeout=self.timeout,
+            include_external=self.include_external,
+        )
+        if err:
+            self._log(f"Navigation note: {err}")
+
+        menu_count = 0
+        for u in menu_urls:
+            if len(self.discovered_urls) >= self.max_pages:
+                break
+            if self._add_url(u, source="menu"):
+                menu_count += 1
+        self._log(f"🧭 Discovered {menu_count} page(s) from website Navigation & Menus.")
+
+        # 2. XML Sitemap scan
+        self._log("🗺️ Scanning XML sitemaps and robots.txt...")
+        sitemap_urls, sitemaps = discover_sitemap_urls(
+            self.base_url,
+            timeout=self.timeout,
+            include_external=self.include_external,
+        )
+        sitemap_count = 0
+        for u in sitemap_urls:
+            if len(self.discovered_urls) >= self.max_pages:
+                break
+            if self._add_url(u, source="sitemap"):
+                sitemap_count += 1
+
+        # Only check homepage sitemaps if none were found from base_url
+        if not sitemap_urls and self.base_url.strip("/") != homepage.strip("/"):
+            extra_urls, _ = discover_sitemap_urls(
+                homepage,
+                timeout=self.timeout,
+                include_external=self.include_external,
+            )
+            for u in extra_urls:
+                if len(self.discovered_urls) >= self.max_pages:
+                    break
+                if self._add_url(u, source="sitemap"):
+                    sitemap_count += 1
+
+        self._log(f"🗺️ Discovered {sitemap_count} page(s) from XML sitemap(s).")
+        self._log(f"✅ Finished! Found {len(self.discovered_urls)} unique pages total (from Menu + Sitemap combined).")
         return self.discovered_urls
 
     def crawl_smart(self) -> list[str]:
         """Smart discovery: Navigation + Sitemap + Internal link crawler."""
-        self._log(f"Starting Smart Discovery for {self.base_url}...")
-        self._add_url(self.base_url, source="homepage")
+        parsed = urlparse(self.base_url)
+        homepage = f"{parsed.scheme or 'https'}://{parsed.netloc}/"
+        self._log(f"Starting Smart Discovery for {homepage}...")
+        self._add_url(homepage, source="homepage")
 
         # 1. Menu links
         if self.check_navigation:
             self._log("Scanning navigation and menu elements...")
             menu_urls, err = fetch_and_extract_menu_urls(
-                self.base_url,
+                homepage,
                 timeout=self.timeout,
                 include_external=self.include_external,
             )

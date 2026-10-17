@@ -27,11 +27,14 @@ class Settings:
     follow_internal_links: bool = True
 
     # Archiving
-    archive_delay: int = 15
-    request_timeout: int = 60
-    retries: int = 3
-    check_existing_snapshots: bool = True
-    skip_existing_days: int = 30
+    concurrency: int = 3
+    archive_delay: int = 2
+    request_timeout: int = 45
+    retries: int = 2
+    max_poll_seconds: int = 60
+    capture_all: bool = False
+    check_existing_snapshots: bool = False
+    skip_existing_days: int = 0
 
     # Filtering
     include_external: bool = False

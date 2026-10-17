@@ -107,8 +107,10 @@ async function startDiscovery(mode) {
   document.getElementById("discoveryCountBadge").textContent = "0 Pages Found";
 
   // Disable buttons while discovering
+  const btnBoth = document.getElementById("btnDiscoverBoth");
   const btnMenu = document.getElementById("btnDiscoverMenu");
   const btnSitemap = document.getElementById("btnDiscoverSitemap");
+  if (btnBoth) btnBoth.disabled = true;
   if (btnMenu) btnMenu.disabled = true;
   if (btnSitemap) btnSitemap.disabled = true;
 
@@ -137,6 +139,7 @@ async function startDiscovery(mode) {
   } catch (err) {
     alert("Failed to start discovery: " + err.message);
     document.getElementById("discoveryProgressSection").style.display = "none";
+    if (btnBoth) btnBoth.disabled = false;
     if (btnMenu) btnMenu.disabled = false;
     if (btnSitemap) btnSitemap.disabled = false;
   }
@@ -163,8 +166,10 @@ async function pollDiscoveryStatus() {
     if (data.status === "completed" || data.status === "failed") {
       clearInterval(discoveryPollInterval);
       document.getElementById("discoveryProgressSection").style.display = "none";
+      const btnBoth = document.getElementById("btnDiscoverBoth");
       const btnMenu = document.getElementById("btnDiscoverMenu");
       const btnSitemap = document.getElementById("btnDiscoverSitemap");
+      if (btnBoth) btnBoth.disabled = false;
       if (btnMenu) btnMenu.disabled = false;
       if (btnSitemap) btnSitemap.disabled = false;
 
@@ -288,10 +293,12 @@ async function startArchiving() {
   }
 
   const websiteUrl = document.getElementById("websiteUrl").value.trim();
+  const cfgConcurrencyEl = document.getElementById("cfgConcurrency");
+  const concurrency = cfgConcurrencyEl ? (parseInt(cfgConcurrencyEl.value, 10) || 3) : 3;
   const cfgDelayEl = document.getElementById("cfgArchiveDelay");
-  const archiveDelay = cfgDelayEl ? (parseInt(cfgDelayEl.value, 10) || 15) : 15;
+  const archiveDelay = cfgDelayEl ? (parseInt(cfgDelayEl.value, 10) ?? 2) : 2;
   const cfgSkipEl = document.getElementById("cfgSkipDays");
-  const skipDays = cfgSkipEl ? (parseInt(cfgSkipEl.value, 10) ?? 30) : 30;
+  const skipDays = cfgSkipEl ? parseInt(cfgSkipEl.value, 10) : 0;
 
   const urlsToArchive = Array.from(selectedUrlsSet);
 
@@ -303,7 +310,7 @@ async function startArchiving() {
   document.getElementById("progressFraction").textContent = `0 / ${urlsToArchive.length}`;
   document.getElementById("progressBarFill").style.width = "0%";
   document.getElementById("currentUrlDisplay").textContent = "Preparing queue...";
-  document.getElementById("currentStageDisplay").textContent = "Initializing Wayback Machine session...";
+  document.getElementById("currentStageDisplay").textContent = `Initializing Wayback Machine session (${concurrency} parallel workers)...`;
   document.getElementById("resultsTableBody").innerHTML = "";
 
   document.getElementById("archivingSection").scrollIntoView({ behavior: "smooth" });
@@ -316,7 +323,9 @@ async function startArchiving() {
         website_url: websiteUrl,
         urls: urlsToArchive,
         archive_delay: archiveDelay,
+        concurrency: concurrency,
         skip_existing_days: skipDays,
+        check_existing_snapshots: skipDays > 0,
       }),
     });
 
@@ -493,3 +502,5 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
 }
+
+
